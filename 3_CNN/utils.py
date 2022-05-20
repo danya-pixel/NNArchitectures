@@ -1,127 +1,156 @@
+import os
 import numpy as np
+from skimage import transform
+import matplotlib.pyplot as plt
+import concurrent.futures as cf
+import idx2numpy
 
 
-class Param:
-    def __init__(self, value):
-        self.value = value
-        self.grad = np.zeros_like(value)
+def load_mnist(folder):
+    train_x = np.expand_dims(
+        idx2numpy.convert_from_file(os.path.join(folder, "train-images-idx3-ubyte")),
+        axis=3,
+    )
+    train_y = idx2numpy.convert_from_file(
+        os.path.join(folder, "train-labels-idx1-ubyte")
+    )
+    test_x = np.expand_dims(
+        idx2numpy.convert_from_file(os.path.join(folder, "t10k-images-idx3-ubyte")),
+        axis=3,
+    )
+    test_y = idx2numpy.convert_from_file(os.path.join(folder, "t10k-labels-idx1-ubyte"))
+
+    return train_x, train_y, test_x, test_y
 
 
-class MSE():
-    def __init__(self):
-        pass
+def resize_dataset(dataset):
+    args = [dataset[i : i + 1000] for i in range(0, len(dataset), 1000)]
 
-    def derivative(self, pred, y) -> float:
-        return pred-y
+    def f(chunk):
+        return transform.resize(chunk, (chunk.shape[0], 1, 32, 32))
 
-    def compute(self, pred, y) -> float:
-        return np.sum(pred-y)**2
+    with cf.ThreadPoolExecutor() as executor:
+        res = executor.map(f, args)
+
+    res = np.array([*res])
+    res = res.reshape(-1, 1, 32, 32)
+    return res
+
+
+def dataloader(X, y, BATCH_SIZE):
+    n = len(X)
+    for t in range(0, n, BATCH_SIZE):
+        yield X[t : t + BATCH_SIZE, ...], y[t : t + BATCH_SIZE, ...]
+
+
+class Dataset:
+    def __init__(self, trainx, trainy, valx, valy):
+        self.trainx = trainx
+        self.trainy = trainy
+        self.valx = valx
+        self.valy = valy
+        self.train_len = len(trainx)
+        self.val_len = len(valx)
+
+    def data_loader(self, type, BATCH_SIZE=64):
+
+        if type == "train":
+            for t in range(0, self.train_len, BATCH_SIZE):
+                yield self.trainx[t : t + BATCH_SIZE, ...], self.trainy[
+                    t : t + BATCH_SIZE, ...
+                ]
+
+        if type == "val":
+            for t in range(0, self.val_len, BATCH_SIZE):
+                yield self.valx[t : t + BATCH_SIZE, ...], self.valy[
+                    t : t + BATCH_SIZE, ...
+                ]
+
+
+def one_hot_encoding(y):
+    N = y.shape[0]
+    Z = np.zeros((N, 10))
+    Z[np.arange(N), y] = 1
+    return Z
+
+
+def show_batch(train_X, train_y):
+    num_row = 2
+    num_col = 5
+    _, axes = plt.subplots(num_row, num_col, figsize=(2 * num_col, 2 * num_row))
+    for i in range(10):
+        ax = axes[i // num_col, i % num_col]
+        ax.imshow(train_X[i][0], cmap="gray")
+        ax.set_title("Label: {}".format(np.argmax(train_y[i])))
+    plt.tight_layout()
+    plt.show()
+
+
+def prepare_for_neural_network(train_X, test_X):
+    train_X = train_X.astype(np.float64) / 255.0
+    test_X = test_X.astype(np.float64) / 255.0
+
+    mean_image = np.mean(train_X, axis=0)
+    train_X -= mean_image
+    test_X -= mean_image
+
+    return train_X, test_X
+
+
+def random_split_train_val(X, y, percent_val, seed=42):
+    np.random.seed(seed)
+
+    indices = np.arange(X.shape[0])
+    np.random.shuffle(indices)
+    num_val = int(X.shape[0] * percent_val)
+    train_indices = indices[:-num_val]
+    train_X = X[train_indices]
+    train_y = y[train_indices]
+
+    val_indices = indices[-num_val:]
+    val_X = X[val_indices]
+    val_y = y[val_indices]
+
+    return train_X, train_y, val_X, val_y
 
 
 def get_indices(X_shape, HF, WF, stride, pad):
-    """
-        Returns index matrices in order to transform our input image into a matrix.
-        Parameters:
-        -X_shape: Input image shape.
-        -HF: filter height.
-        -WF: filter width.
-        -stride: stride value.
-        -pad: padding value.
-        Returns:
-        -i: matrix of index i.
-        -j: matrix of index j.
-        -d: matrix of index d. 
-            (Use to mark delimitation for each channel
-            during multi-dimensional arrays indexing).
-    """
-    # get input size
     m, n_C, n_H, n_W = X_shape
 
-    # get output size
     out_h = int((n_H + 2 * pad - HF) / stride) + 1
     out_w = int((n_W + 2 * pad - WF) / stride) + 1
 
-    # ----Compute matrix of index i----
-
-    # Level 1 vector.
     level1 = np.repeat(np.arange(HF), WF)
-    # Duplicate for the other channels.
     level1 = np.tile(level1, n_C)
-    # Create a vector with an increase by 1 at each level.
     everyLevels = stride * np.repeat(np.arange(out_h), out_w)
-    # Create matrix of index i at every levels for each channel.
     i = level1.reshape(-1, 1) + everyLevels.reshape(1, -1)
 
-    # ----Compute matrix of index j----
-
-    # Slide 1 vector.
     slide1 = np.tile(np.arange(WF), HF)
-    # Duplicate for the other channels.
     slide1 = np.tile(slide1, n_C)
-    # Create a vector with an increase by 1 at each slide.
     everySlides = stride * np.tile(np.arange(out_w), out_h)
-    # Create matrix of index j at every slides for each channel.
     j = slide1.reshape(-1, 1) + everySlides.reshape(1, -1)
-
-    # ----Compute matrix of index d----
-
-    # This is to mark delimitation for each channel
-    # during multi-dimensional arrays indexing.
     d = np.repeat(np.arange(n_C), HF * WF).reshape(-1, 1)
 
     return i, j, d
 
 
+def im2col(X, HF, WF, stride, pad):
+    X_padded = np.pad(X, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode="constant")
+    i, j, d = get_indices(X.shape, HF, WF, stride, pad)
+    cols = X_padded[:, d, i, j]
+    cols = np.concatenate(cols, axis=-1)
+    return cols
+
+
 def col2im(dX_col, X_shape, HF, WF, stride, pad):
-    """
-        Transform our matrix back to the input image.
-        Parameters:
-        - dX_col: matrix with error.
-        - X_shape: input image shape.
-        - HF: filter height.
-        - WF: filter width.
-        - stride: stride value.
-        - pad: padding value.
-        Returns:
-        -x_padded: input image with error.
-    """
-    # Get input size
     N, D, H, W = X_shape
-    # Add padding if needed.
     H_padded, W_padded = H + 2 * pad, W + 2 * pad
     X_padded = np.zeros((N, D, H_padded, W_padded))
 
-    # Index matrices, necessary to transform our input image into a matrix.
     i, j, d = get_indices(X_shape, HF, WF, stride, pad)
-    # Retrieve batch dimension by spliting dX_col N times: (X, Y) => (N, X, Y)
     dX_col_reshaped = np.array(np.hsplit(dX_col, N))
-    # Reshape our matrix back to image.
-    # slice(None) is used to produce the [::] effect which means "for every elements".
     np.add.at(X_padded, (slice(None), d, i, j), dX_col_reshaped)
-    # Remove padding from new image if needed.
     if pad == 0:
         return X_padded
     elif type(pad) is int:
         return X_padded[pad:-pad, pad:-pad, :, :]
-
-
-def im2col(X, HF, WF, stride, pad):
-    """
-        Transforms our input image into a matrix.
-        Parameters:
-        - X: input image.
-        - HF: filter height.
-        - WF: filter width.
-        - stride: stride value.
-        - pad: padding value.
-        Returns:
-        -cols: output matrix.
-    """
-    # Padding
-    X_padded = np.pad(X, ((0, 0), (0, 0), (pad, pad),
-                      (pad, pad)), mode='constant')
-    i, j, d = get_indices(X.shape, HF, WF, stride, pad)
-    # Multi-dimensional arrays indexing.
-    cols = X_padded[:, d, i, j]
-    cols = np.concatenate(cols, axis=-1)
-    return cols

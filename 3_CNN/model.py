@@ -1,83 +1,87 @@
-import numpy as np
+from layers import *
+from utils import *
+class LeNet5():
 
-from layers import (
-    FullyConnectedLayer, ReLULayer,
-    Conv2D, MaxPoolingLayer, Flattener,
-    softmax_with_cross_entropy, l2_regularization
-    )
+    def __init__(self):
+        self.conv1 = Conv(nb_filters = 6, filter_size = 5, nb_channels = 1, padding = 2)
+        self.tanh1 = Sigmoid()
+        self.pool1 = MaxPool(filter_size = 2, stride = 2)
+        self.conv2 = Conv(nb_filters = 16, filter_size = 5, nb_channels = 6)
+        self.tanh2 = Sigmoid()
+        self.pool2 = MaxPool(filter_size = 2, stride = 2)
+        self.pool2_shape = None
+        self.fc1 = Fc(row = 120, column = 5*5*16)
+        self.tanh3 = Sigmoid()
+        self.fc2 = Fc(row = 84, column = 120)
+        self.tanh4 = Sigmoid()
+        self.fc3 = Fc(row = 10 , column = 84)
+        self.softmax = Softmax()
+
+        self.layers = [self.conv1, self.conv2, self.fc1, self.fc2, self.fc3]
 
 
-class AlexNet:
-    """
-    Implements a AlexNet
-    """
-    def __init__(self, input_shape, n_output_classes):
-        """
-        Initializes the neural network
-        Arguments:
-        input_shape, tuple of 3 ints - image_width, image_height, n_channels
-                                         Will be equal to (1, 28, 28)
-        n_output_classes, int - number of classes to predict
-        """
-        self.conv_1 = Conv2D(in_channels = input_shape, out_channels = 8, filter_size = 11, stride=4)
-        self.relu_1 = ReLULayer()
-        self.pool_1 = MaxPoolingLayer(pool_size = 3, stride = 2)
-        self.conv_2 = Conv2D(in_channels = 3, out_channels = 8, filter_size = 5, padding = 2)
-        self.relu_2 = ReLULayer()
-        self.pool_2 = MaxPoolingLayer(pool_size = 3, stride = 2)
-        self.conv_3 = Conv2D(in_channels = 3, out_channels = 3, filter_size = 5, padding = 2)
-        self.relu_3 = ReLULayer()
-        self.conv_4 = Conv2D(in_channels = 3, out_channels = 3, filter_size = 5, padding = 2)
-        self.relu_4 = ReLULayer()
-        self.conv_5 = Conv2D(in_channels = 3, out_channels = 3, filter_size = 5, padding = 2)
-        self.relu_5 = ReLULayer()
-        self.pool_3 = MaxPoolingLayer(pool_size = 3, stride = 2)
-        self.flat = Flattener()
-        self.fc = FullyConnectedLayer(n_input = 147, n_output = n_output_classes)
-        self.relu_6 = ReLULayer()
-        self.fc2 = FullyConnectedLayer(n_input = 147, n_output = n_output_classes)
-        self.relu_7 = ReLULayer()
-        self.fc3 = FullyConnectedLayer(n_input = 147, n_output = n_output_classes)
-    
-    def forward_pass(self, X):
-        out = self.fc.forward(
-            self.flat.forward(
-            self.pool_2.forward(self.relu_2.forward(self.conv_2.forward(
-            self.pool_1.forward(self.relu_1.forward(self.conv_1.forward(X)
-                                                   )))))))
-        return out
-    
-    def backward_pass(self, d_out):
-        d_result = self.conv_1.backward(
-            self.relu_1.backward(
-            self.pool_1.backward(self.conv_2.backward(self.relu_2.backward(
-            self.pool_2.backward(self.flat.backward(self.fc.backward(d_out)
-                                                   )))))))
-        return d_result
-    
-    def compute_loss_and_gradients(self, X, y):
-        """
-        Computes total loss and updates parameter gradients
-        on a batch of training examples
-        Arguments:
-        X, np array (batch_size, height, width, input_features) - input data
-        y, np array of int (batch_size) - classes
-        """
-        for param in self.params().values():
-            param.grad = np.zeros_like(param.value)
-        out = self.forward_pass(X)
-        loss, d_out = softmax_with_cross_entropy(out, y)
-        self.backward_pass(d_out)
+    def forward(self, X):
+        conv1 = self.conv1.forward(X) #(6x28x28)
+        act1 = self.tanh1.forward(conv1)
+        pool1 = self.pool1.forward(act1) #(6x14x14)
+
+        conv2 = self.conv2.forward(pool1) #(16x10x10)
+        act2 = self.tanh2.forward(conv2)
+        pool2 = self.pool2.forward(act2) #(16x5x5)
         
-        return loss
+        self.pool2_shape = pool2.shape
+        pool2_flatten = pool2.reshape(self.pool2_shape[0], -1) #(1x400)
+    
+        fc1 = self.fc1.forward(pool2_flatten) #(1x120)
+        act3 = self.tanh3.forward(fc1)
+        
+        fc2 = self.fc2.forward(act3) #(1x84)
+        act4 = self.tanh4.forward(fc2)
+        
+        fc3 = self.fc3.forward(act4) #(1x10)
+    
+        y_pred = self.softmax.forward(fc3)
 
-    def predict(self, X):
-        out = self.forward_pass(X)
-        pred = np.argmax(out, axis = 1)
-        return pred
+        return y_pred
+        
+    def backward(self, y_pred, y):
+        deltaL = self.softmax.backward(y_pred, y)
+        deltaL, dW5, db5, = self.fc3.backward(deltaL)
+        deltaL = self.tanh4.backward(deltaL) 
+        
+        deltaL, dW4, db4 = self.fc2.backward(deltaL)
+        deltaL = self.tanh3.backward(deltaL) 
+        
+        deltaL, dW3, db3 = self.fc1.backward(deltaL) 
+        deltaL = deltaL.reshape(self.pool2_shape) 
+        
+        deltaL = self.pool2.backward(deltaL) 
+        deltaL = self.tanh2.backward(deltaL)
 
-    def params(self):
-        result = {'W1': self.conv_1.params()['W'], 'B1': self.conv_1.params()['B'], 
-                'W2': self.conv_2.params()['W'], 'B2': self.conv_2.params()['B'], 
-                 'W3': self.fc.params()['W'], 'B3': self.fc.params()['B']}
-        return result
+        deltaL, dW2, db2 = self.conv2.backward(deltaL)
+        deltaL = self.pool1.backward(deltaL) 
+        deltaL = self.tanh1.backward(deltaL)
+        deltaL, dW1, db1 = self.conv1.backward(deltaL) 
+    
+        grads = { 
+                'dW1': dW1, 'db1': db1,
+                'dW2': dW2, 'db2': db2, 
+                'dW3': dW3, 'db3': db3,
+                'dW4': dW4, 'db4': db4,
+                'dW5': dW5, 'db5': db5
+        }
+
+        return grads
+
+    def get_params(self):
+        params = {}
+        for i, layer in enumerate(self.layers):
+            params['W' + str(i+1)] = layer.W['val']
+            params['b' + str(i+1)] = layer.b['val']
+
+        return params
+
+    def set_params(self, params):
+        for i, layer in enumerate(self.layers):
+            layer.W['val'] = params['W'+ str(i+1)]
+            layer.b['val'] = params['b' + str(i+1)]
