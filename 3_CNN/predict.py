@@ -1,14 +1,6 @@
-from utils import *
-from layers import *
-import numpy as np
+from utils import dataloader
 from tqdm import trange
-
-filename = [
-    ["training_images", "train-images-idx3-ubyte.gz"],
-    ["test_images", "t10k-images-idx3-ubyte.gz"],
-    ["training_labels", "train-labels-idx1-ubyte.gz"],
-    ["test_labels", "t10k-labels-idx1-ubyte.gz"],
-]
+import numpy as np
 
 
 class Metrics:
@@ -20,7 +12,7 @@ class Metrics:
 
     def test(self, model, cost):
 
-        BATCH_SIZE = 100
+        BATCH_SIZE = 64
         self.y_pred_arr = np.array([])
         nb_test_examples = len(self.x_test)
         test_loss = 0

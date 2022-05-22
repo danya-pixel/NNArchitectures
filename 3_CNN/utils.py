@@ -1,40 +1,5 @@
-import os
 import numpy as np
-from skimage import transform
 import matplotlib.pyplot as plt
-import concurrent.futures as cf
-import idx2numpy
-
-
-def load_mnist(folder):
-    train_x = np.expand_dims(
-        idx2numpy.convert_from_file(os.path.join(folder, "train-images-idx3-ubyte")),
-        axis=3,
-    )
-    train_y = idx2numpy.convert_from_file(
-        os.path.join(folder, "train-labels-idx1-ubyte")
-    )
-    test_x = np.expand_dims(
-        idx2numpy.convert_from_file(os.path.join(folder, "t10k-images-idx3-ubyte")),
-        axis=3,
-    )
-    test_y = idx2numpy.convert_from_file(os.path.join(folder, "t10k-labels-idx1-ubyte"))
-
-    return train_x, train_y, test_x, test_y
-
-
-def resize_dataset(dataset):
-    args = [dataset[i : i + 1000] for i in range(0, len(dataset), 1000)]
-
-    def f(chunk):
-        return transform.resize(chunk, (chunk.shape[0], 1, 32, 32))
-
-    with cf.ThreadPoolExecutor() as executor:
-        res = executor.map(f, args)
-
-    res = np.array([*res])
-    res = res.reshape(-1, 1, 32, 32)
-    return res
 
 
 def dataloader(X, y, BATCH_SIZE):

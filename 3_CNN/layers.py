@@ -2,7 +2,7 @@ from utils import im2col, col2im
 import numpy as np
 
 
-class Conv:
+class Conv2d:
     def __init__(self, nb_filters, filter_size, nb_channels, stride=1, padding=0):
         self.n_F = nb_filters
         self.f = filter_size
@@ -92,7 +92,7 @@ class MaxPool:
         return dX
 
 
-class Fc:
+class FullyConnected:
     def __init__(self, row, column):
         self.row = row
         self.col = column
@@ -124,37 +124,6 @@ class Fc:
         return new_deltaL, self.W["grad"], self.b["grad"]
 
 
-class AdamGD:
-    def __init__(self, lr, beta1, beta2, epsilon, params):
-        self.lr = lr
-        self.beta1 = beta1
-        self.beta2 = beta2
-        self.epsilon = epsilon
-        self.params = params
-
-        self.momentum = {}
-        self.rmsprop = {}
-
-        for key in self.params:
-            self.momentum["vd" + key] = np.zeros(self.params[key].shape)
-            self.rmsprop["sd" + key] = np.zeros(self.params[key].shape)
-
-    def update_params(self, grads):
-
-        for key in self.params:
-            self.momentum["vd" + key] = (self.beta1 * self.momentum["vd" + key]) + (
-                1 - self.beta1
-            ) * grads["d" + key]
-            self.rmsprop["sd" + key] = (self.beta2 * self.rmsprop["sd" + key]) + (
-                1 - self.beta2
-            ) * (grads["d" + key] ** 2)
-            self.params[key] = self.params[key] - (
-                self.lr * self.momentum["vd" + key]
-            ) / (np.sqrt(self.rmsprop["sd" + key]) + self.epsilon)
-
-        return self.params
-
-
 class Sigmoid:
     def __init__(self):
         self.cache = None
@@ -168,6 +137,9 @@ class Sigmoid:
     def backward(self, new_deltaL):
         return new_deltaL * self.out * (1 - self.out)
 
+
+def Sigmoid(X):
+    return 1 / (1 + np.exp(-X))
 
 class Softmax:
     def __init__(self):

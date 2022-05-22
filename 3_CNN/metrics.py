@@ -1,10 +1,8 @@
 from tqdm import trange
+from utils import dataloader
+from layers import Sigmoid
 import numpy as np
-from utils import *
-
-def Sigmoid(X):
-    return 1 / (1 + np.exp(-X))
-
+import matplotlib.pyplot as plt
 
 class Metrics:
     def __init__(self, x_test, y_test, y_pred=None, y_pred_arr_probs=None):
@@ -55,11 +53,12 @@ class Metrics:
     def ROC_AUC(self):
         points_num = 300
         thresholds = np.linspace(0.5, 1, points_num)
-        y_sigm = Sigmoid(self.y_pred_arr_probs)
+        sigmoid_layer = Sigmoid()
+        y_sigm = sigmoid_layer.forward(self.y_pred_arr_probs)
         y_pred_bin_l = (y_sigm == y_sigm.max(axis=1)[:, None]).astype(int)
         plt.figure(figsize=(20, 20))
         plt.subplots_adjust(
-            left=0.1, bottom=0.1, right=0.5, top=0.9, wspace=0.4, hspace=0.4
+            left=0.1, bottom=0.1, right=0.9, top=0.9, wspace=0.4, hspace=0.4
         )
 
         for label in range(10):

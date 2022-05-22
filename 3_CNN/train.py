@@ -1,5 +1,3 @@
-from utils import *
-from layers import *
 import numpy as np
 from tqdm import trange
 from timeit import default_timer as timer
