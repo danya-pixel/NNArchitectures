@@ -1,7 +1,7 @@
 import numpy as np
 from pathlib import Path
 from activations import sigmoid, dsigmoid, lrelu, dlrelu, dtanh
-from vizualize import sample_images, generate_gif
+from vizualize import sample_images
 
 
 class GAN:
@@ -17,7 +17,6 @@ class GAN:
         decay_rate=1e-4,
         image_size=28,
         display_epochs=5,
-        create_gif=True,
     ):
         self.numbers = numbers
         self.epochs = epochs
@@ -29,7 +28,6 @@ class GAN:
         self.dr = decay_rate
         self.image_size = image_size
         self.display_epochs = display_epochs
-        self.create_gif = create_gif
 
         self.image_dir = Path("./GAN_sample_images")
         if not self.image_dir.is_dir():
@@ -219,6 +217,4 @@ class GAN:
 
             self.lr = self.lr * (1.0 / (1.0 + self.dr * epoch))
 
-        if self.create_gif:
-            generate_gif(self.filenames)
         return J_Ds, J_Gs

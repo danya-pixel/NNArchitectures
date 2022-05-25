@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import imageio
 
 def sample_images(batch_size, image_size, image_dir, filenames, images, epoch, show):
         images = np.reshape(images, (batch_size, image_size, image_size))

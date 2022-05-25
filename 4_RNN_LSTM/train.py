@@ -1,5 +1,5 @@
 import numpy as np
-
+import copy
 
 def train_model(
     model,
@@ -9,7 +9,7 @@ def train_model(
     X_val,
     y_val,
     batch_size,
-    learning_rate=1e-3,
+    learning_rate=1e-2,
     epoch_num=1200,
 ):
     best_val_loss = np.inf
@@ -46,7 +46,7 @@ def train_model(
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_model = model
+            best_model = copy.deepcopy(model)
 
         if epoch % 50 == 0:
             print(
